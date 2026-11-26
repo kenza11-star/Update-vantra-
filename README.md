@@ -1,24 +1,23 @@
 # Vantra Update (Vercel)
 
-Upload APK → isi Version → **Send**. App otomatis melihat versi baru, kirim notifikasi "Vantra update", dan tombol Install di About app menampilkan persen download lalu memasang otomatis.
+Upload APK → isi Version → **Send**. App melihat versi baru, kirim notifikasi "Vantra update", tombol Install di About app menampilkan persen download lalu memasang otomatis.
 
-## Deploy (sekali saja, ±5 menit)
-1. Taruh folder ini di repo GitHub baru (atau `vercel` CLI dari folder ini) → **Import ke Vercel**. Framework preset: **Other**.
-2. Di project Vercel: **Storage → Create → Blob** → Connect ke project ini (otomatis menambah `BLOB_READ_WRITE_TOKEN`).
-3. **Settings → Environment Variables** → tambah `ADMIN_PASSWORD` = password pilihanmu (Production + Preview).
-4. **Redeploy**. Buka `https://NAMA-PROJECT.vercel.app`.
-5. Di app: edit `UpdateServerUrl` di `GithubUpdates.kt` ke URL itu (lihat patch app).
+## Deploy (sekali saja)
+1. Taruh folder ini di repo GitHub (atau `vercel` CLI) → Import ke Vercel. Framework preset: **Other**.
+2. **Storage → Create → Blob** → Connect ke project (otomatis menambah `BLOB_READ_WRITE_TOKEN`).
+3. **Settings → Environment Variables** → `ADMIN_PASSWORD` = password pilihanmu.
+4. **Redeploy**, buka alamat utama `nama-project.vercel.app`.
+5. Salin alamat dari kartu "alamat server" di halaman → tempel ke `UpdateServerUrl` di app.
 
-## Pakai alamat utama, bukan alamat deployment
-Buka situs lewat alamat utama (mis. `nama-project.vercel.app`), **bukan** alamat panjang berhash (`...-abc123-tim.vercel.app`). Alamat berhash diproteksi login Vercel: callback upload ditolak (upload mengulang dari 0) dan app tidak bisa membaca daftar update. Situs menampilkan peringatan + tombol kalau kamu salah buka. Kalau alamat utama juga meminta login: **Settings → Deployment Protection → Vercel Authentication → Disabled**.
+Kalau alamat utama minta login Vercel: **Settings → Deployment Protection → Vercel Authentication → Disabled**.
 
-## Kenapa Send cepat
-APK **mulai terunggah di latar begitu dipilih** (setelah password terisi). Saat kamu mengetik versi & catatan, upload sudah jalan; tekan **Send** dan yang tersisa hanya mengirim versi (≈1 detik). Kalau upload belum selesai, Send menunggu dan persennya tampil di tombol.
+## Cara kerja upload
+APK dipecah di browser jadi potongan 4 MB, dikirim ke `/api/chunk` (3 sekaligus, tiap potongan diulang otomatis kalau gagal). Upload mulai begitu file dipilih dan password terisi. Saat **Send**, `/api/assemble` menyambung potongan jadi satu APK, memeriksa itu file APK, menaruhnya di daftar rilis, dan menghapus potongan sementara. Tidak ada token/callback ke storage, jadi tidak tergantung alamat deployment.
 
 ## Endpoint
-- `GET /api/releases` → daftar rilis (format sama seperti GitHub Releases, dipakai app)
-- `POST /api/upload` · `POST /api/publish` · `POST /api/delete` (butuh password)
+- `GET /api/releases` → daftar rilis (format GitHub Releases, dipakai app)
+- `GET /api/config` · `POST /api/chunk` · `POST /api/assemble` · `POST /api/publish` (mode link) · `POST /api/delete`
 
 ## Penting
-- APK baru **harus ditandatangani dengan key yang sama** dan `versionCode` **lebih besar**, kalau tidak Android menolak update.
-- Batas file Blob: tiap APK upload langsung dari browser, aman untuk ratusan MB.
+- APK baru harus ditandatangani key yang **sama** dan `versionCode` **lebih besar**, kalau tidak Android menolak update.
+- Batas ukuran APK: ±250 MB.

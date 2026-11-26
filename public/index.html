@@ -173,7 +173,6 @@ textarea{resize:vertical;min-height:96px;line-height:1.5}
         <span class="lbl" id="lbl">Send</span>
       </button>
       <p class="hint" id="hint"></p>
-      <pre class="diag" id="diag" hidden></pre>
     </form>
   </section>
 
@@ -205,8 +204,6 @@ textarea{resize:vertical;min-height:96px;line-height:1.5}
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { upload } from 'https://esm.sh/@vercel/blob@1/client';
-
 const $ = (q) => document.querySelector(q);
 const pw = $('#pw'), file = $('#file'), drop = $('#drop'), ver = $('#ver'), notes = $('#notes');
 const send = $('#send'), fill = $('#fill'), lbl = $('#lbl'), hint = $('#hint'), dbar = $('#dbar'), fmeta = $('#fmeta'), chip = $('#chip');
@@ -220,36 +217,10 @@ const VER_RE = /^\d+\.\d+(\.\d+)?( ?\(\d+\))?$/;
 const nums = (v) => (v.match(/\d+/g) || []).slice(0,3).map(Number);
 const cmp = (a, b) => { const x = nums(a), y = nums(b); for (let i=0;i<3;i++){ const d=(x[i]||0)-(y[i]||0); if (d) return d; } return 0; };
 const nextVer = (v) => { const n = nums(v); while (n.length < 3) n.push(0); n[2]++; return n.join('.'); };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let tt; function toast(t){ const e=$('#toast'); e.textContent=t; e.classList.add('show'); clearTimeout(tt); tt=setTimeout(()=>e.classList.remove('show'),2200); }
 function say(t, err){ hint.textContent = t; hint.classList.toggle('err', !!err); }
 $('#cpsrv').onclick = () => { navigator.clipboard?.writeText(appUrl()); toast('Alamat server disalin'); };
-
-
-/* ---------- network log: shows what the storage answered, so a failing upload explains itself ---------- */
-const netlog = [];
-const logNet = (t) => { netlog.push(t); if (netlog.length > 6) netlog.shift(); };
-const showDiag = () => { const d = $('#diag'); d.hidden = false; d.textContent = 'Diagnostik:\n' + (netlog.join('\n') || '(storage tidak menjawab sama sekali)'); };
-(() => {
-  const isBlob = (u) => /blob|vercel-storage|vercel\.com\/api/.test(u);
-  const X = XMLHttpRequest.prototype, open = X.open, sendX = X.send;
-  X.open = function (m, u) { this.__m = m; this.__u = String(u); return open.apply(this, arguments); };
-  X.send = function () {
-    if (isBlob(this.__u || '')) {
-      const t0 = Date.now(), x = this;
-      x.addEventListener('loadend', () => logNet(`${x.__m} ${new URL(x.__u, location.href).host.slice(0,26)}${new URL(x.__u, location.href).pathname.slice(0,26)} → ${x.status || 'putus'} (${Math.round((Date.now()-t0)/1000)}s) ${x.status ? String(x.responseText || '').slice(0, 90) : ''}`));
-    }
-    return sendX.apply(this, arguments);
-  };
-  const f = window.fetch;
-  window.fetch = async function (...a) {
-    const u = String(a[0]?.url || a[0]), t0 = Date.now();
-    try {
-      const r = await f.apply(this, a);
-      if (isBlob(u) && !u.includes('/api/releases')) r.clone().text().then((t) => logNet(`fetch ${new URL(u, location.href).pathname.slice(0,30)} → ${r.status} (${Math.round((Date.now()-t0)/1000)}s) ${t.slice(0, 90)}`)).catch(() => {});
-      return r;
-    } catch (e) { if (isBlob(u)) logNet(`fetch ${u.slice(0, 40)} → putus: ${e.message}`); throw e; }
-  };
-})();
 
 /* ---------- odometer ---------- */
 const odo = $('#odo'); let odoShape = '';
@@ -267,12 +238,12 @@ function setOdo(text){
 }
 function applyOdo(text){ const cols=odo.querySelectorAll('.col'); let i=0; for (const c of text) if (/\d/.test(c)) cols[i++].style.transform=`translateY(${-(+c)}em)`; }
 
-/* ---------- server self-check (once, in the background) ---------- */
-const cfgReady = fetch('/api/upload',{cache:'no-store'}).then(r=>r.json()).then(j=>{
+/* ---------- server self-check ---------- */
+const cfgReady = fetch('/api/config',{cache:'no-store'}).then(r=>r.json()).then(j=>{
   cfg=j; $('#srv').textContent = appUrl();
   if (j.prod && location.host !== j.prod){
     const w = $('#warn'); w.hidden = false;
-    w.innerHTML = '<span>Kamu membuka alamat deployment yang diproteksi Vercel, upload bisa gagal dan app tidak bisa membaca update dari sini. Pakai alamat utama:</span>';
+    w.innerHTML = '<span>Kamu membuka alamat deployment yang diproteksi Vercel, app tidak bisa membaca update dari sini. Pakai alamat utama:</span>';
     const a = document.createElement('a'); a.href = 'https://' + j.prod; a.textContent = 'Buka ' + j.prod; w.append(a);
   }
   return j;
@@ -284,6 +255,52 @@ async function ensureCfg(){
   if (!c.password) throw new Error('ADMIN_PASSWORD belum diisi di Environment Variables (lalu Redeploy).');
 }
 
+/* ---------- chunked upload: 4 MB pieces through our own server, 3 at a time, each retried ---------- */
+const CHUNK = 4 * 1024 * 1024;
+async function uploadChunks(f, password, onProgress, signal){
+  const id = [...crypto.getRandomValues(new Uint8Array(10))].map((b) => b.toString(16).padStart(2,'0')).join('');
+  const n = Math.ceil(f.size / CHUNK), parts = new Array(n), loaded = new Array(n).fill(0);
+  const sizeOf = (i) => Math.min(CHUNK, f.size - i * CHUNK);
+  const report = () => onProgress(Math.min(99.9, loaded.reduce((a, b) => a + b, 0) / f.size * 100));
+
+  const sendChunk = (i) => new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open('POST', `/api/chunk?id=${id}&n=${i}`);
+    x.timeout = 120000;
+    x.setRequestHeader('content-type', 'application/octet-stream');
+    x.setRequestHeader('x-pw', encodeURIComponent(password));
+    x.upload.onprogress = (e) => { loaded[i] = e.loaded; report(); };
+    x.onload = () => {
+      let d = {}; try { d = JSON.parse(x.responseText); } catch {}
+      if (x.status === 200 && d.url) return resolve(d);
+      const err = new Error(d.error || (x.status === 401 || x.status === 403 ? `Ditolak (HTTP ${x.status}). Buka lewat alamat utama, bukan alamat deployment.` : `Server membalas HTTP ${x.status}`));
+      err.fatal = [400, 401, 403, 413].includes(x.status); reject(err);
+    };
+    x.onerror = () => reject(new Error('Jaringan putus'));
+    x.ontimeout = () => reject(new Error('Koneksi terlalu lambat'));
+    x.onabort = () => reject(new Error('Dibatalkan'));
+    signal.addEventListener('abort', () => x.abort(), { once: true });
+    x.send(f.slice(i * CHUNK, i * CHUNK + sizeOf(i)));
+  });
+
+  let next = 0, failed = null;
+  const worker = async () => {
+    while (!failed){
+      const i = next++; if (i >= n) return;
+      for (let attempt = 0; ; attempt++){
+        try { parts[i] = await sendChunk(i); loaded[i] = sizeOf(i); report(); break; }
+        catch (e){
+          if (signal.aborted) throw e;
+          if (e.fatal || attempt >= 4){ failed = e; throw e; }
+          loaded[i] = 0; report(); await sleep(700 * (attempt + 1));
+        }
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, n) }, worker));
+  return parts;
+}
+
 /* ---------- background upload: starts the moment APK + password are there ---------- */
 function paintUpload(){
   drop.classList.toggle('ready', up?.state === 'done');
@@ -291,7 +308,7 @@ function paintUpload(){
   fmeta.className = 'meta' + (up?.state === 'done' ? ' ok' : up?.state === 'err' ? ' bad' : '');
   if (!chosen){ dbar.style.width='0'; fmeta.textContent=''; return; }
   if (!up){ dbar.style.width='0'; fmeta.textContent = fmt(chosen.size) + (pw.value ? '' : ' · isi password untuk mulai upload'); return; }
-  if (up.state === 'run'){ dbar.style.opacity=1; dbar.style.width = up.pct+'%'; fmeta.textContent = up.pct ? `Mengunggah ${Math.floor(up.pct)}% · ${fmt(chosen.size*up.pct/100)} / ${fmt(chosen.size)}` : `${fmt(chosen.size)} · menyambung…`; }
+  if (up.state === 'run'){ dbar.style.opacity=1; dbar.style.width = up.pct+'%'; fmeta.textContent = up.pct >= 0.5 ? `Mengunggah ${Math.floor(up.pct)}% · ${fmt(chosen.size*up.pct/100)} / ${fmt(chosen.size)}` : `${fmt(chosen.size)} · menyambung…`; }
   if (up.state === 'done'){ fmeta.textContent = `${fmt(chosen.size)} · siap dikirim ✓`; }
   if (up.state === 'err'){ fmeta.textContent = up.err; dbar.style.width='0'; }
 }
@@ -304,25 +321,16 @@ function startUpload(){
   const me = up = { file: chosen, pw: pw.value, ctrl, state: 'run', pct: 0 };
   me.promise = (async () => {
     await ensureCfg();
-    const blob = await upload(`apk/vantra-${Date.now()}.apk`, me.file, {
-      access: 'public', handleUploadUrl: '/api/upload', clientPayload: me.pw, abortSignal: ctrl.signal,
-      contentType: 'application/vnd.android.package-archive',
-      multipart: true,   // small parts: a dropped connection repeats one part, not the whole file
-      onUploadProgress: ({ percentage }) => {
-        if (percentage + 8 < me.pct){   // went backwards = the SDK is starting over after a dropped connection
-          me.restarts = (me.restarts || 0) + 1;
-          if (me.restarts >= 2){ me.failMsg = 'Koneksi terputus berulang saat upload (lihat diagnostik di bawah).'; showDiag(); ctrl.abort(); return; }
-          say('Koneksi tidak stabil, mengulang bagian yang gagal…', true); showDiag();
-        }
-        me.pct = percentage; if (up === me) paintUpload();
-        if (busy){ fill.style.width = percentage+'%'; lbl.textContent = `Mengunggah… ${Math.floor(percentage)}%`; }
-      },
-    });
-    me.blob = blob; me.pct = 100; me.state = 'done'; if (up === me) paintUpload();
-    return blob;
+    const parts = await uploadChunks(me.file, me.pw, (p) => {
+      me.pct = p; if (up === me) paintUpload();
+      if (busy){ fill.style.width = p+'%'; lbl.textContent = `Mengunggah… ${Math.floor(p)}%`; }
+    }, ctrl.signal);
+    me.parts = parts; me.pct = 100; me.state = 'done'; if (up === me) paintUpload();
+    return parts;
   })().catch((e) => {
-    if (ctrl.signal.aborted && !me.failMsg) return null;
-    me.state = 'err'; me.err = me.failMsg || e.message || 'Upload gagal'; showDiag(); if (up === me) { paintUpload(); say(me.err, true); }
+    if (ctrl.signal.aborted) return null;
+    me.state = 'err'; me.err = e.message || 'Upload gagal';
+    if (up === me){ paintUpload(); say(me.err, true); }
     throw e;
   });
   me.promise.catch(() => {});
@@ -333,11 +341,11 @@ function startUpload(){
 function pick(f){
   if (!f) return;
   if (!/\.apk$/i.test(f.name)){ say('File harus .apk', true); return; }
-  cancelUpload(); $('#diag').hidden = true; netlog.length = 0; chosen = f; drop.classList.add('has');
+  cancelUpload(); chosen = f; drop.classList.add('has');
   $('#fname').textContent = f.name; $('#fsub').textContent = 'Ketuk untuk ganti';
   const m = f.name.match(/(\d+\.\d+(?:\.\d+)?)/);
   if (m && !ver.value){ ver.value = m[1]; sync(); }
-  say(''); paintUpload(); startUpload(); validate();
+  say(''); paintUpload(); if (!linkMode) startUpload(); validate();
 }
 file.addEventListener('change', () => pick(file.files[0]));
 drop.addEventListener('click', () => !busy && file.click());
@@ -348,6 +356,7 @@ drop.addEventListener('pointermove', (e) => { const r=drop.getBoundingClientRect
 drop.addEventListener('drop', (e) => pick(e.dataTransfer.files[0]));
 
 /* ---------- form ---------- */
+const urlOk = () => /^https:\/\/\S+$/i.test($('#apkurl').value.trim());
 function sync(){
   const v = ver.value.trim();
   if (!busy && !sim) setOdo(v || current || '0.0.0');
@@ -356,7 +365,6 @@ function sync(){
   else if (!up || up.state !== 'err') say('');
   validate();
 }
-const urlOk = () => /^https:\/\/\S+$/i.test($('#apkurl').value.trim());
 function validate(){ send.disabled = busy || !((linkMode ? urlOk() : chosen) && VER_RE.test(ver.value.trim()) && pw.value); }
 $('#apkurl').addEventListener('input', validate);
 $('#linkToggle').onclick = () => {
@@ -385,7 +393,7 @@ async function simulateUser(version){
   $('#pt').textContent='Update tersedia'; $('#pill').classList.add('up'); $('#pill').textContent='Update';
   $('#nt').textContent=`Vantra update ${version}`; $('#notif').classList.add('show');
   $('#cap').textContent='Pengguna dapat notifikasi → Update → persen → otomatis terpasang';
-  await new Promise(r=>setTimeout(r,450));
+  await sleep(450);
   const t0=performance.now(), dur=2200;
   await new Promise(res=>{ const tick=(t)=>{ const p=Math.min(100,(t-t0)/dur*100); phoneProgress(p); p<100?requestAnimationFrame(tick):res(); }; requestAnimationFrame(tick); });
   setOdo(version); $('#pill').textContent='About app'; $('#pill').classList.remove('up'); $('#pt').textContent='Version & About app';
@@ -394,6 +402,12 @@ async function simulateUser(version){
 }
 
 /* ---------- send ---------- */
+async function post(url, body){
+  const res = await fetch(url, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Server membalas HTTP ${res.status}${res.status === 504 ? ' (waktu habis, coba Send lagi)' : ''}`);
+  return data;
+}
 $('#f').addEventListener('submit', async (e) => {
   e.preventDefault(); if (busy || send.disabled) return;
   busy = true; send.classList.add('busy'); send.disabled = true; say('');
@@ -401,32 +415,33 @@ $('#f').addEventListener('submit', async (e) => {
   localStorage.setItem('vp', password);
   try { wake = await navigator.wakeLock?.request('screen'); } catch {}
   try {
-    let blob;
-    if (linkMode){ blob = { url: $('#apkurl').value.trim(), pathname: '' }; }
-    else {
+    if (linkMode){
+      lbl.textContent = 'Mengirim…'; fill.style.width = '100%';
+      await post('/api/publish', { password, version, notes: notes.value, apkUrl: $('#apkurl').value.trim(), apkName: `vantra-${version.replace(/[^\d.]/g,'')}.apk`, size: 0 });
+    } else {
       startUpload();
       if (up.state === 'run'){ lbl.textContent = `Mengunggah… ${Math.floor(up.pct)}%`; fill.style.width = up.pct+'%'; }
-      blob = await up.promise;
-      if (!blob) throw new Error('Upload dibatalkan');
+      const parts = await up.promise;
+      if (!parts) throw new Error('Upload dibatalkan');
+      lbl.textContent = 'Merakit APK…'; fill.style.width = '100%'; send.classList.add('wait');
+      await post('/api/assemble', { password, version, notes: notes.value, parts });
+      send.classList.remove('wait');
     }
-    lbl.textContent = 'Mengirim…'; fill.style.width = '100%';
-    const res = await fetch('/api/publish', { method:'POST', headers:{'content-type':'application/json'},
-      body: JSON.stringify({ password, version, notes: notes.value, apkUrl: blob.url, apkName: `vantra-${version.replace(/[^\d.]/g,'')}.apk`, size: chosen ? chosen.size : 0, pathname: blob.pathname }) });
-    const data = await res.json().catch(()=>({}));
-    if (!res.ok) throw new Error(data.error || 'Gagal mengirim');
     send.classList.remove('busy'); send.classList.add('done');
     lbl.innerHTML = '<svg class="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Terkirim';
     say(`Versi ${version} terkirim. Pengguna akan dapat notifikasi.`);
     current = version; up = null;
-    loadList(); simulateUser(version);          // not awaited: the form is free again straight away
+    loadList(); simulateUser(version);
     setTimeout(() => reset(), 1100);
   } catch (err) {
-    say(err.message || 'Gagal', true); if (up?.state === 'err') up = null; reset(true);
+    send.classList.remove('wait'); say(err.message || 'Gagal', true);
+    if (up?.state === 'err') up = null;
+    reset(true);
   } finally { wake?.release?.().catch(()=>{}); wake = null; }
 });
 function reset(keep){
-  busy = false; send.classList.remove('busy','done'); fill.style.width='0'; lbl.textContent='Send';
-  if (!keep){ chosen=null; file.value=''; drop.classList.remove('has','ready','fail'); $('#fname').textContent='Tarik APK ke sini'; $('#fsub').textContent='atau ketuk untuk memilih'; fmeta.textContent=''; dbar.style.width='0'; ver.value=''; notes.value=''; say(''); }
+  busy = false; send.classList.remove('busy','done','wait'); fill.style.width='0'; lbl.textContent='Send';
+  if (!keep){ chosen=null; file.value=''; drop.classList.remove('has','ready','fail'); $('#fname').textContent='Tarik APK ke sini'; $('#fsub').textContent='atau ketuk untuk memilih'; fmeta.textContent=''; dbar.style.width='0'; ver.value=''; notes.value=''; $('#apkurl').value=''; say(''); }
   else paintUpload();
   sync();
 }
@@ -449,8 +464,8 @@ async function loadList(){
       if (!pw.value){ say('Isi password dulu untuk menghapus', true); pw.focus(); return; }
       if (!confirm(`Hapus versi ${v}?`)) return;
       ev.target.textContent='…';
-      const d = await fetch('/api/delete',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw.value,version:v})});
-      if (!d.ok){ say((await d.json().catch(()=>({}))).error||'Gagal menghapus',true); ev.target.textContent='Hapus'; return; }
+      try { await post('/api/delete', { password: pw.value, version: v }); }
+      catch (err){ say(err.message || 'Gagal menghapus', true); ev.target.textContent='Hapus'; return; }
       row.style.transition='opacity .3s,transform .3s'; row.style.opacity=0; row.style.transform='translateX(16px)'; setTimeout(loadList,300);
     };
     listEl.append(row);
