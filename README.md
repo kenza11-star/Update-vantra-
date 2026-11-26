@@ -9,6 +9,9 @@ Upload APK → isi Version → **Send**. App otomatis melihat versi baru, kirim 
 4. **Redeploy**. Buka `https://NAMA-PROJECT.vercel.app`.
 5. Di app: edit `UpdateServerUrl` di `GithubUpdates.kt` ke URL itu (lihat patch app).
 
+## Pakai alamat utama, bukan alamat deployment
+Buka situs lewat alamat utama (mis. `nama-project.vercel.app`), **bukan** alamat panjang berhash (`...-abc123-tim.vercel.app`). Alamat berhash diproteksi login Vercel: callback upload ditolak (upload mengulang dari 0) dan app tidak bisa membaca daftar update. Situs menampilkan peringatan + tombol kalau kamu salah buka. Kalau alamat utama juga meminta login: **Settings → Deployment Protection → Vercel Authentication → Disabled**.
+
 ## Kenapa Send cepat
 APK **mulai terunggah di latar begitu dipilih** (setelah password terisi). Saat kamu mengetik versi & catatan, upload sudah jalan; tekan **Send** dan yang tersisa hanya mengirim versi (≈1 detik). Kalau upload belum selesai, Send menunggu dan persennya tampil di tombol.
 

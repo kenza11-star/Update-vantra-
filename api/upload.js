@@ -2,16 +2,22 @@
 import { handleUpload } from '@vercel/blob/client';
 import { authed } from './_lib.js';
 
+const prodHost = () => process.env.VERCEL_PROJECT_PRODUCTION_URL || '';
+
 export default async function handler(req, res) {
-  // quick self-check the page runs before uploading, so a missing setting shows as a clear message
+  // self-check the page runs first, so a missing setting shows as a clear message
   if (req.method === 'GET') {
     return res.status(200).json({
       blob: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
       password: Boolean(process.env.ADMIN_PASSWORD),
+      prod: prodHost(),
     });
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   try {
+    // Blob calls this endpoint back when an upload ends. A deployment-specific address sits behind
+    // Vercel login, so that callback is refused and the upload fails and restarts. The public main address is not.
+    const callbackUrl = prodHost() ? `https://${prodHost()}/api/upload` : undefined;
     const json = await handleUpload({
       body: req.body,
       request: req,
@@ -21,8 +27,9 @@ export default async function handler(req, res) {
           allowedContentTypes: ['application/vnd.android.package-archive', 'application/octet-stream'],
           maximumSizeInBytes: 600 * 1024 * 1024,
           addRandomSuffix: true,
-          // the default token lives only 30 s: a slow phone upload outlasts it, fails at the very end and starts over
+          // the default token lives only 30 s, shorter than a phone upload
           validUntil: Date.now() + 60 * 60 * 1000,
+          ...(callbackUrl ? { callbackUrl } : {}),
         };
       },
       onUploadCompleted: async () => {},

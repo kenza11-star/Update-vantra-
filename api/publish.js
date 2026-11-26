@@ -8,9 +8,9 @@ export default async function handler(req, res) {
 
   const v = String(version ?? '').trim();
   if (!VERSION_RE.test(v)) return res.status(400).json({ error: 'Format versi: 8.3.2 atau 8.3.2 (120)' });
-  let host = '';
-  try { host = new URL(apkUrl).hostname; } catch {}
-  if (!host.endsWith('.blob.vercel-storage.com')) return res.status(400).json({ error: 'APK belum ter-upload' });
+  let url = null;
+  try { url = new URL(apkUrl); } catch {}
+  if (!url || url.protocol !== 'https:') return res.status(400).json({ error: 'Link APK harus https' });
 
   const release = {
     version: v,
