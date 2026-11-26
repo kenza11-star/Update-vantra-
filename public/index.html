@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050505">
+<title>Vantra Update</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050505; --s1:#0f0f0f; --s2:#171717; --s3:#222; --line:#242424;
+  --tx:#f5f5f2; --mute:#8b8b86; --acc:#ff8a1f; --acc2:#ffb066; --ok:#3ddc84; --bad:#ff5d5d;
+  --ease:cubic-bezier(.2,.9,.2,1); --spring:cubic-bezier(.34,1.56,.64,1);
+  --sans:'Hanken Grotesk',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg);color:var(--tx);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body{min-height:100dvh;padding:max(20px,env(safe-area-inset-top)) 20px max(28px,env(safe-area-inset-bottom));overflow-x:hidden}
+body::before{content:"";position:fixed;inset:-20% -10% auto;height:70vh;pointer-events:none;
+  background:radial-gradient(50% 60% at 30% 0%,rgba(255,138,31,.13),transparent 70%),radial-gradient(40% 50% at 85% 10%,rgba(255,176,102,.06),transparent 70%)}
+main{position:relative;max-width:1080px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:28px;align-items:start}
+header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:8px 2px 4px}
+.logo{width:38px;height:38px;border-radius:12px;background:var(--s2);display:grid;place-items:center;font-size:20px}
+header h1{font-size:20px;font-weight:800;letter-spacing:-.02em}
+header p{color:var(--mute);font-size:13px}
+.card{background:var(--s1);border-radius:28px;padding:22px;border:1px solid var(--line)}
+form{display:grid;gap:18px}
+label{display:grid;gap:8px;font-size:13px;font-weight:600;color:var(--mute)}
+input[type=text],input[type=password],textarea{width:100%;background:var(--s2);border:1px solid transparent;border-radius:18px;color:var(--tx);
+  font:500 16px var(--sans);padding:15px 16px;outline:none;transition:border-color .25s var(--ease),background .25s var(--ease),box-shadow .25s var(--ease)}
+input::placeholder,textarea::placeholder{color:#55554f}
+input:focus,textarea:focus{border-color:rgba(255,138,31,.55);background:#1b1b1b;box-shadow:0 0 0 4px rgba(255,138,31,.1)}
+input.ver{font:500 22px var(--mono);letter-spacing:-.01em}
+textarea{resize:vertical;min-height:96px;line-height:1.5}
+
+/* drop zone */
+.drop{position:relative;border-radius:22px;background:var(--s2);padding:26px 18px;text-align:center;cursor:pointer;overflow:hidden;isolation:isolate;
+  outline:1.5px dashed #34342f;outline-offset:-1.5px;transition:transform .35s var(--spring),outline-color .25s,background .25s}
+.drop::before{content:"";position:absolute;inset:0;z-index:-1;opacity:0;transition:opacity .3s;
+  background:radial-gradient(180px circle at var(--mx,50%) var(--my,50%),rgba(255,138,31,.2),transparent 70%)}
+.drop:hover::before,.drop.over::before{opacity:1}
+.drop:active{transform:scale(.985)}
+.drop.over{outline-color:var(--acc);transform:scale(1.015)}
+.drop.has{outline-style:solid;outline-color:rgba(255,138,31,.45)}
+.drop input{display:none}
+.drop .ico{width:46px;height:46px;margin:0 auto 10px;border-radius:15px;background:var(--s3);display:grid;place-items:center;transition:transform .5s var(--spring)}
+.drop:hover .ico,.drop.over .ico{transform:translateY(-3px) rotate(-6deg)}
+.drop b{display:block;font-size:16px;font-weight:600;word-break:break-all}
+.drop small{color:var(--mute);font-size:13px}
+.drop .meta{font:400 12px var(--mono);color:var(--acc2);margin-top:6px;display:block}
+
+/* send */
+.send{position:relative;height:58px;border:0;border-radius:29px;background:var(--tx);color:#000;font:800 17px var(--sans);cursor:pointer;overflow:hidden;
+  transition:transform .3s var(--spring),background .3s,opacity .3s,filter .3s;-webkit-user-select:none;user-select:none}
+.send:hover:not(:disabled){filter:brightness(1.06)}
+.send:active:not(:disabled){transform:scale(.965)}
+.send:disabled{opacity:.35;cursor:not-allowed}
+.send .fill{position:absolute;inset:0 auto 0 0;width:0%;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .25s linear}
+.send .lbl{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;height:100%}
+.send.wait .fill{width:35%!important;opacity:.55;animation:sweep 1.1s ease-in-out infinite alternate}
+@keyframes sweep{from{transform:translateX(-30%)}to{transform:translateX(190%)}}
+.send.busy{background:var(--s3);color:var(--tx);cursor:progress}
+.send.done{background:var(--ok);color:#03210f}
+.send .ripple{position:absolute;border-radius:50%;background:rgba(0,0,0,.18);transform:scale(0);animation:rip .6s var(--ease) forwards;pointer-events:none}
+@keyframes rip{to{transform:scale(4);opacity:0}}
+.check{width:22px;height:22px;stroke:currentColor;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:26;stroke-dashoffset:26;animation:draw .5s .05s var(--ease) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.hint{font-size:12.5px;color:var(--mute);text-align:center;min-height:18px;transition:color .2s}
+.hint.err{color:var(--bad)}
+
+/* phone preview */
+.stage{position:sticky;top:20px;display:grid;gap:16px}
+.phone{background:#000;border-radius:38px;padding:16px;border:1px solid var(--line);display:grid;gap:12px}
+.pc{background:#0e0e0e;border-radius:26px;padding:20px 20px 22px;position:relative;overflow:hidden}
+.pc .t{color:#6f6f6a;font-size:14px;font-weight:500}
+.pc .row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:6px}
+.odo{display:inline-flex;font-size:clamp(46px,9vw,64px);font-weight:800;letter-spacing:-.045em;line-height:1;height:1em;overflow:hidden;font-variant-numeric:tabular-nums}
+.odo .ch{display:block;height:1em;overflow:hidden}
+.odo .col{display:flex;flex-direction:column;transition:transform .9s var(--ease)}
+.odo .col span{height:1em;line-height:1}
+.odo .dot{display:block;height:1em;line-height:1;width:.32em;text-align:center}
+.pill{border:0;background:#4a4a4a;color:#fff;font:600 15px var(--sans);padding:11px 20px;border-radius:999px;margin-bottom:4px;transition:background .4s,transform .3s var(--spring);cursor:default}
+.pill.up{background:var(--acc);color:#1a0d00;animation:pop .6s var(--spring)}
+@keyframes pop{0%{transform:scale(.8)}100%{transform:scale(1)}}
+.bar{height:46px;border-radius:23px;background:#1b1b1b;position:relative;overflow:hidden;display:grid;place-items:center;font-weight:700;font-size:14px;color:#fff}
+.bar i{position:absolute;inset:0 auto 0 0;width:0;background:rgba(255,138,31,.32)}
+.bar span{position:relative}
+.notif{display:flex;gap:12px;align-items:center;background:rgba(30,30,30,.92);border-radius:22px;padding:12px 14px;transform:translateY(-14px) scale(.96);opacity:0;transition:transform .6s var(--spring),opacity .4s}
+.notif.show{transform:none;opacity:1}
+.notif .ni{width:34px;height:34px;border-radius:10px;background:var(--acc);display:grid;place-items:center;font-size:17px}
+.notif b{display:block;font-size:14px}.notif small{color:var(--mute);font-size:12.5px}
+.cap{font-size:12.5px;color:var(--mute);text-align:center}
+
+
+.drop .dbar{position:absolute;left:0;bottom:0;height:4px;width:0;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .25s linear,opacity .4s;border-radius:0 4px 4px 0}
+.drop.ready{outline-color:rgba(61,220,132,.55)}.drop.ready .dbar{width:100%;background:var(--ok);opacity:0}
+.drop.fail{outline-color:rgba(255,93,93,.6)}
+.drop .meta.ok{color:var(--ok)}.drop .meta.bad{color:var(--bad)}
+.chip{justify-self:start;border:0;background:var(--s2);color:var(--acc2);font:500 13px var(--mono);padding:7px 12px;border-radius:99px;cursor:pointer;transition:transform .3s var(--spring),background .2s;animation:in .4s var(--ease) both}
+.chip:hover{background:var(--s3)}.chip:active{transform:scale(.93)}
+.srv{display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--line);border-radius:20px;padding:10px 10px 10px 16px}
+.srv code{flex:1;min-width:0;font:400 12.5px var(--mono);color:var(--acc2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srv button,.item .cp{background:var(--s2);border:0;color:var(--tx);border-radius:99px;padding:8px 14px;font:600 13px var(--sans);cursor:pointer;transition:transform .25s var(--spring),background .2s}
+.srv button:active,.item .cp:active{transform:scale(.92)}.srv button:hover,.item .cp:hover{background:var(--s3)}
+.item .cp{color:var(--mute)}
+.toast{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translate(-50%,30px);opacity:0;background:#1d1d1d;border:1px solid var(--line);color:var(--tx);padding:12px 18px;border-radius:99px;font-size:14px;font-weight:600;pointer-events:none;transition:transform .5s var(--spring),opacity .3s;z-index:9}
+.toast.show{transform:translate(-50%,0);opacity:1}
+.item .n small{display:block;font-size:12px;opacity:.7;overflow:hidden;text-overflow:ellipsis}
+
+/* history */
+.hist{grid-column:1/-1}
+.hist h2{font-size:15px;font-weight:700;margin:2px 2px 12px}
+.item{display:flex;align-items:center;gap:14px;padding:14px 4px;border-top:1px solid var(--line);animation:in .5s var(--ease) both}
+.item:first-of-type{border-top:0}
+@keyframes in{from{opacity:0;transform:translateY(8px)}}
+.item .v{font:500 18px var(--mono);min-width:92px}
+.item .n{flex:1;min-width:0;color:var(--mute);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .tag{font-size:11.5px;color:#1a0d00;background:var(--acc);border-radius:99px;padding:3px 9px;font-weight:700}
+.item button.rm{background:var(--s2);border:0;color:var(--mute);border-radius:99px;padding:8px 14px;font:600 13px var(--sans);cursor:pointer;transition:background .2s,color .2s,transform .25s var(--spring)}
+.item button.rm:hover{background:#2a1414;color:var(--bad)}.item button.rm:active{transform:scale(.92)}
+.empty{color:var(--mute);font-size:14px;padding:10px 2px}
+
+@media(max-width:860px){main{grid-template-columns:1fr}.stage{position:static;order:-1}}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo">🔥</div>
+    <div><h1>Vantra Update</h1><p>Kirim versi baru ke semua pengguna</p></div>
+  </header>
+
+  <section class="card">
+    <form id="f" autocomplete="off">
+      <label for="pw">Password admin
+        <input id="pw" type="password" placeholder="••••••••" autocomplete="current-password">
+      </label>
+
+      <div>
+        <label style="margin-bottom:8px">Upload APK</label>
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Pilih file APK">
+          <input id="file" type="file" accept=".apk,application/vnd.android.package-archive">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f5f5f2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg></div>
+          <b id="fname">Tarik APK ke sini</b>
+          <small id="fsub">atau ketuk untuk memilih</small>
+          <span class="meta" id="fmeta"></span>
+          <i class="dbar" id="dbar"></i>
+        </div>
+      </div>
+
+      <label for="ver">Version
+        <input id="ver" class="ver" type="text" inputmode="decimal" placeholder="8.3.2" maxlength="16">
+        <button type="button" class="chip" id="chip" hidden></button>
+      </label>
+
+      <label for="notes">Catatan update <span style="font-weight:400">(opsional, tampil di app)</span>
+        <textarea id="notes" placeholder="- Liquid player lebih halus&#10;- Perbaikan bug"></textarea>
+      </label>
+
+      <button class="send" id="send" type="submit" disabled>
+        <span class="fill" id="fill"></span>
+        <span class="lbl" id="lbl">Send</span>
+      </button>
+      <p class="hint" id="hint"></p>
+    </form>
+  </section>
+
+  <aside class="stage">
+    <div class="phone">
+      <div class="pc">
+        <div class="t" id="pt">Version &amp; About app</div>
+        <div class="row">
+          <div class="odo" id="odo" aria-live="polite"></div>
+          <button class="pill" id="pill" type="button" tabindex="-1">About app</button>
+        </div>
+      </div>
+      <div class="bar" id="pbar"><i id="pfill"></i><span id="ptxt">Install here</span></div>
+      <div class="notif" id="notif">
+        <div class="ni">🔥</div>
+        <div><b id="nt">Vantra update</b><small>Ketuk untuk lihat yang baru</small></div>
+      </div>
+    </div>
+    <p class="cap" id="cap">Pratinjau di HP pengguna</p>
+    <div class="srv"><code id="srv"></code><button type="button" id="cpsrv">Salin</button></div>
+    <p class="cap">Tempel alamat ini di <b>UpdateServerUrl</b> (sekali saja)</p>
+  </aside>
+
+  <section class="card hist">
+    <h2>Riwayat rilis</h2>
+    <div id="list"></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { upload } from 'https://esm.sh/@vercel/blob@1/client';
+
+const $ = (q) => document.querySelector(q);
+const pw = $('#pw'), file = $('#file'), drop = $('#drop'), ver = $('#ver'), notes = $('#notes');
+const send = $('#send'), fill = $('#fill'), lbl = $('#lbl'), hint = $('#hint'), dbar = $('#dbar'), fmeta = $('#fmeta'), chip = $('#chip');
+let chosen = null, busy = false, current = null, sim = false, cfg = null, up = null, wake = null;
+pw.value = localStorage.getItem('vp') || '';
+$('#srv').textContent = location.origin;
+
+const fmt = (b) => b >= 1e6 ? (b/1e6).toFixed(1)+' MB' : Math.round(b/1e3)+' KB';
+const VER_RE = /^\d+\.\d+(\.\d+)?( ?\(\d+\))?$/;
+const nums = (v) => (v.match(/\d+/g) || []).slice(0,3).map(Number);
+const cmp = (a, b) => { const x = nums(a), y = nums(b); for (let i=0;i<3;i++){ const d=(x[i]||0)-(y[i]||0); if (d) return d; } return 0; };
+const nextVer = (v) => { const n = nums(v); while (n.length < 3) n.push(0); n[2]++; return n.join('.'); };
+let tt; function toast(t){ const e=$('#toast'); e.textContent=t; e.classList.add('show'); clearTimeout(tt); tt=setTimeout(()=>e.classList.remove('show'),2200); }
+function say(t, err){ hint.textContent = t; hint.classList.toggle('err', !!err); }
+$('#cpsrv').onclick = () => { navigator.clipboard?.writeText(location.origin); toast('Alamat server disalin'); };
+
+/* ---------- odometer ---------- */
+const odo = $('#odo'); let odoShape = '';
+function setOdo(text){
+  const shape = text.replace(/\d/g,'#');
+  if (shape !== odoShape){
+    odoShape = shape; odo.innerHTML = '';
+    for (const c of text){
+      if (!/\d/.test(c)){ const d=document.createElement('span'); d.className='dot'; d.textContent=c; odo.append(d); continue; }
+      const ch=document.createElement('span'); ch.className='ch'; const col=document.createElement('span'); col.className='col';
+      col.innerHTML=[...Array(10).keys()].map(n=>`<span>${n}</span>`).join(''); ch.append(col); odo.append(ch);
+    }
+    requestAnimationFrame(()=>requestAnimationFrame(()=>applyOdo(text)));
+  } else applyOdo(text);
+}
+function applyOdo(text){ const cols=odo.querySelectorAll('.col'); let i=0; for (const c of text) if (/\d/.test(c)) cols[i++].style.transform=`translateY(${-(+c)}em)`; }
+
+/* ---------- server self-check (once, in the background) ---------- */
+const cfgReady = fetch('/api/upload',{cache:'no-store'}).then(r=>r.json()).then(j=>{cfg=j;return j;}).catch(()=>null);
+async function ensureCfg(){
+  const c = cfg || await cfgReady;
+  if (!c) throw new Error('Server tidak merespons. Cek koneksi atau deploy-nya.');
+  if (!c.blob) throw new Error('Blob belum terhubung: Vercel → Storage → Blob → Connect ke project, lalu Redeploy.');
+  if (!c.password) throw new Error('ADMIN_PASSWORD belum diisi di Environment Variables (lalu Redeploy).');
+}
+
+/* ---------- background upload: starts the moment APK + password are there ---------- */
+function paintUpload(){
+  drop.classList.toggle('ready', up?.state === 'done');
+  drop.classList.toggle('fail', up?.state === 'err');
+  fmeta.className = 'meta' + (up?.state === 'done' ? ' ok' : up?.state === 'err' ? ' bad' : '');
+  if (!chosen){ dbar.style.width='0'; fmeta.textContent=''; return; }
+  if (!up){ dbar.style.width='0'; fmeta.textContent = fmt(chosen.size) + (pw.value ? '' : ' · isi password untuk mulai upload'); return; }
+  if (up.state === 'run'){ dbar.style.opacity=1; dbar.style.width = up.pct+'%'; fmeta.textContent = up.pct ? `Mengunggah ${Math.floor(up.pct)}% · ${fmt(chosen.size*up.pct/100)} / ${fmt(chosen.size)}` : `${fmt(chosen.size)} · menyambung…`; }
+  if (up.state === 'done'){ fmeta.textContent = `${fmt(chosen.size)} · siap dikirim ✓`; }
+  if (up.state === 'err'){ fmeta.textContent = up.err; dbar.style.width='0'; }
+}
+function cancelUpload(){ if (up?.state === 'run') up.ctrl.abort(); up = null; }
+function startUpload(){
+  if (!chosen || !pw.value) return;
+  if (up && up.file === chosen && up.pw === pw.value && up.state !== 'err') return;
+  cancelUpload();
+  const ctrl = new AbortController();
+  const me = up = { file: chosen, pw: pw.value, ctrl, state: 'run', pct: 0 };
+  me.promise = (async () => {
+    await ensureCfg();
+    const blob = await upload(`apk/vantra-${Date.now()}.apk`, me.file, {
+      access: 'public', handleUploadUrl: '/api/upload', clientPayload: me.pw, abortSignal: ctrl.signal,
+      contentType: 'application/vnd.android.package-archive',
+      multipart: me.file.size > 60e6,
+      onUploadProgress: ({ percentage }) => {
+        me.pct = percentage; if (up === me) paintUpload();
+        if (busy){ fill.style.width = percentage+'%'; lbl.textContent = `Mengunggah… ${Math.floor(percentage)}%`; }
+      },
+    });
+    me.blob = blob; me.pct = 100; me.state = 'done'; if (up === me) paintUpload();
+    return blob;
+  })().catch((e) => {
+    if (ctrl.signal.aborted) return null;
+    me.state = 'err'; me.err = e.message || 'Upload gagal'; if (up === me) { paintUpload(); say(me.err, true); }
+    throw e;
+  });
+  me.promise.catch(() => {});
+  paintUpload();
+}
+
+/* ---------- file ---------- */
+function pick(f){
+  if (!f) return;
+  if (!/\.apk$/i.test(f.name)){ say('File harus .apk', true); return; }
+  cancelUpload(); chosen = f; drop.classList.add('has');
+  $('#fname').textContent = f.name; $('#fsub').textContent = 'Ketuk untuk ganti';
+  const m = f.name.match(/(\d+\.\d+(?:\.\d+)?)/);
+  if (m && !ver.value){ ver.value = m[1]; sync(); }
+  say(''); paintUpload(); startUpload(); validate();
+}
+file.addEventListener('change', () => pick(file.files[0]));
+drop.addEventListener('click', () => !busy && file.click());
+drop.addEventListener('keydown', (e) => (e.key==='Enter'||e.key===' ') && (e.preventDefault(), file.click()));
+drop.addEventListener('pointermove', (e) => { const r=drop.getBoundingClientRect(); drop.style.setProperty('--mx',(e.clientX-r.left)+'px'); drop.style.setProperty('--my',(e.clientY-r.top)+'px'); });
+['dragenter','dragover'].forEach(t => drop.addEventListener(t,(e)=>{ e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(t => drop.addEventListener(t,(e)=>{ e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', (e) => pick(e.dataTransfer.files[0]));
+
+/* ---------- form ---------- */
+function sync(){
+  const v = ver.value.trim();
+  if (!busy && !sim) setOdo(v || current || '0.0.0');
+  chip.hidden = !!v || !current; if (!chip.hidden) chip.textContent = `Pakai ${nextVer(current)}`;
+  if (v && VER_RE.test(v) && current && cmp(v, current) <= 0) say(`Versi ini tidak lebih baru dari ${current}, pengguna tidak akan dapat update.`, true);
+  else if (!up || up.state !== 'err') say('');
+  validate();
+}
+function validate(){ send.disabled = busy || !(chosen && VER_RE.test(ver.value.trim()) && pw.value); }
+chip.onclick = () => { ver.value = nextVer(current); sync(); };
+ver.addEventListener('input', sync);
+let pwT; pw.addEventListener('input', () => { clearTimeout(pwT); pwT = setTimeout(() => { startUpload(); paintUpload(); }, 450); validate(); });
+addEventListener('beforeunload', (e) => { if (up?.state === 'run' || busy){ e.preventDefault(); e.returnValue=''; } });
+addEventListener('keydown', (e) => { if ((e.ctrlKey||e.metaKey) && e.key==='Enter') $('#f').requestSubmit(); });
+
+send.addEventListener('pointerdown', (e) => {
+  if (send.disabled) return;
+  const r=send.getBoundingClientRect(), s=Math.max(r.width,r.height), d=document.createElement('span'); d.className='ripple';
+  d.style.cssText=`width:${s}px;height:${s}px;left:${e.clientX-r.left-s/2}px;top:${e.clientY-r.top-s/2}px`; send.append(d); setTimeout(()=>d.remove(),650);
+});
+
+/* ---------- user's-phone preview ---------- */
+function phoneProgress(p){ $('#pfill').style.width=p+'%'; $('#ptxt').textContent = p>=100 ? 'Installing…' : `Downloading… ${Math.round(p)}%`; }
+async function simulateUser(version){
+  sim = true;
+  $('#pt').textContent='Update tersedia'; $('#pill').classList.add('up'); $('#pill').textContent='Update';
+  $('#nt').textContent=`Vantra update ${version}`; $('#notif').classList.add('show');
+  $('#cap').textContent='Pengguna dapat notifikasi → Update → persen → otomatis terpasang';
+  await new Promise(r=>setTimeout(r,450));
+  const t0=performance.now(), dur=2200;
+  await new Promise(res=>{ const tick=(t)=>{ const p=Math.min(100,(t-t0)/dur*100); phoneProgress(p); p<100?requestAnimationFrame(tick):res(); }; requestAnimationFrame(tick); });
+  setOdo(version); $('#pill').textContent='About app'; $('#pill').classList.remove('up'); $('#pt').textContent='Version & About app';
+  $('#notif').classList.remove('show'); $('#ptxt').textContent='Install here'; $('#pfill').style.width='0';
+  $('#cap').textContent='Pratinjau di HP pengguna'; sim = false; sync();
+}
+
+/* ---------- send ---------- */
+$('#f').addEventListener('submit', async (e) => {
+  e.preventDefault(); if (busy || send.disabled) return;
+  busy = true; send.classList.add('busy'); send.disabled = true; say('');
+  const version = ver.value.trim(), password = pw.value;
+  localStorage.setItem('vp', password);
+  try { wake = await navigator.wakeLock?.request('screen'); } catch {}
+  try {
+    startUpload();
+    if (up.state === 'run'){ lbl.textContent = `Mengunggah… ${Math.floor(up.pct)}%`; fill.style.width = up.pct+'%'; }
+    const blob = await up.promise;
+    if (!blob) throw new Error('Upload dibatalkan');
+    lbl.textContent = 'Mengirim…'; fill.style.width = '100%';
+    const res = await fetch('/api/publish', { method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ password, version, notes: notes.value, apkUrl: blob.url, apkName: `vantra-${version.replace(/[^\d.]/g,'')}.apk`, size: chosen.size, pathname: blob.pathname }) });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok) throw new Error(data.error || 'Gagal mengirim');
+    send.classList.remove('busy'); send.classList.add('done');
+    lbl.innerHTML = '<svg class="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Terkirim';
+    say(`Versi ${version} terkirim. Pengguna akan dapat notifikasi.`);
+    current = version; up = null;
+    loadList(); simulateUser(version);          // not awaited: the form is free again straight away
+    setTimeout(() => reset(), 1100);
+  } catch (err) {
+    say(err.message || 'Gagal', true); if (up?.state === 'err') up = null; reset(true);
+  } finally { wake?.release?.().catch(()=>{}); wake = null; }
+});
+function reset(keep){
+  busy = false; send.classList.remove('busy','done'); fill.style.width='0'; lbl.textContent='Send';
+  if (!keep){ chosen=null; file.value=''; drop.classList.remove('has','ready','fail'); $('#fname').textContent='Tarik APK ke sini'; $('#fsub').textContent='atau ketuk untuk memilih'; fmeta.textContent=''; dbar.style.width='0'; ver.value=''; notes.value=''; say(''); }
+  else paintUpload();
+  sync();
+}
+
+/* ---------- history ---------- */
+const listEl = $('#list');
+async function loadList(){
+  const res = await fetch('/api/releases',{cache:'no-store'}).catch(()=>null);
+  const data = res && res.ok ? await res.json() : [];
+  current = data[0] ? data[0].tag_name.replace(/^v/,'') : current;
+  listEl.innerHTML = data.length ? '' : '<p class="empty">Belum ada rilis. Upload APK pertama kamu di atas.</p>';
+  data.forEach((r,i) => {
+    const v = r.tag_name.replace(/^v/,''), a = r.assets[0] || {};
+    const first = (r.body||'').split('\n').map(x=>x.replace(/^[-•*\s]+/,'')).find(Boolean) || '';
+    const row = document.createElement('div'); row.className='item'; row.style.animationDelay=(i*45)+'ms';
+    row.innerHTML = `<span class="v">${v}</span><span class="n">${new Date(r.published_at).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})}${a.size?' · '+fmt(a.size):''}${first?`<small></small>`:''}</span>${i===0?'<span class="tag">terbaru</span>':''}<button class="cp" type="button">Salin link</button><button class="rm" type="button">Hapus</button>`;
+    if (first) row.querySelector('small').textContent = first;
+    row.querySelector('.cp').onclick = () => { navigator.clipboard?.writeText(a.browser_download_url||''); toast('Link APK disalin'); };
+    row.querySelector('.rm').onclick = async (ev) => {
+      if (!pw.value){ say('Isi password dulu untuk menghapus', true); pw.focus(); return; }
+      if (!confirm(`Hapus versi ${v}?`)) return;
+      ev.target.textContent='…';
+      const d = await fetch('/api/delete',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw.value,version:v})});
+      if (!d.ok){ say((await d.json().catch(()=>({}))).error||'Gagal menghapus',true); ev.target.textContent='Hapus'; return; }
+      row.style.transition='opacity .3s,transform .3s'; row.style.opacity=0; row.style.transform='translateX(16px)'; setTimeout(loadList,300);
+    };
+    listEl.append(row);
+  });
+  sync();
+}
+setOdo('0.0.0'); loadList(); validate();
+</script>
+</body>
+</html>
