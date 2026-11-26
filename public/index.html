@@ -69,7 +69,7 @@ textarea{resize:vertical;min-height:96px;line-height:1.5}
 .check{width:22px;height:22px;stroke:currentColor;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:26;stroke-dashoffset:26;animation:draw .5s .05s var(--ease) forwards}
 @keyframes draw{to{stroke-dashoffset:0}}
 .hint{font-size:12.5px;color:var(--mute);text-align:center;min-height:18px;transition:color .2s}
-.hint.err{color:var(--bad)}
+.hint.err{color:#ffb4b4;background:rgba(255,93,93,.1);border:1px solid rgba(255,93,93,.3);border-radius:16px;padding:12px 14px;text-align:left;font-size:13.5px;line-height:1.5}
 
 /* phone preview */
 .stage{position:sticky;top:20px;display:grid;gap:16px}
@@ -98,7 +98,7 @@ textarea{resize:vertical;min-height:96px;line-height:1.5}
 .drop .dbar{position:absolute;left:0;bottom:0;height:4px;width:0;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .25s linear,opacity .4s;border-radius:0 4px 4px 0}
 .drop.ready{outline-color:rgba(61,220,132,.55)}.drop.ready .dbar{width:100%;background:var(--ok);opacity:0}
 .drop.fail{outline-color:rgba(255,93,93,.6)}
-.drop .meta.ok{color:var(--ok)}.drop .meta.bad{color:var(--bad)}
+.drop .meta.ok{color:var(--ok)}.drop .meta.bad{color:var(--bad);white-space:normal;line-height:1.4}
 .chip{justify-self:start;border:0;background:var(--s2);color:var(--acc2);font:500 13px var(--mono);padding:7px 12px;border-radius:99px;cursor:pointer;transition:transform .3s var(--spring),background .2s;animation:in .4s var(--ease) both}
 .chip:hover{background:var(--s3)}.chip:active{transform:scale(.93)}
 .srv{display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--line);border-radius:20px;padding:10px 10px 10px 16px}
@@ -256,8 +256,8 @@ async function ensureCfg(){
 }
 
 /* ---------- chunked upload: 4 MB pieces through our own server, 3 at a time, each retried ---------- */
-const CHUNK = 4 * 1024 * 1024;
-async function uploadChunks(f, password, onProgress, signal){
+const CHUNK = 2 * 1024 * 1024, PARALLEL = 2, TRIES = 5;
+async function uploadChunks(f, password, onProgress, signal, onNote){
   const id = [...crypto.getRandomValues(new Uint8Array(10))].map((b) => b.toString(16).padStart(2,'0')).join('');
   const n = Math.ceil(f.size / CHUNK), parts = new Array(n), loaded = new Array(n).fill(0);
   const sizeOf = (i) => Math.min(CHUNK, f.size - i * CHUNK);
@@ -291,13 +291,14 @@ async function uploadChunks(f, password, onProgress, signal){
         try { parts[i] = await sendChunk(i); loaded[i] = sizeOf(i); report(); break; }
         catch (e){
           if (signal.aborted) throw e;
-          if (e.fatal || attempt >= 4){ failed = e; throw e; }
-          loaded[i] = 0; report(); await sleep(700 * (attempt + 1));
+          if (e.fatal || attempt >= TRIES - 1){ failed = new Error(`Potongan ${i + 1}/${n} gagal: ${e.message}`); throw failed; }
+          loaded[i] = 0; report(); onNote?.(`Potongan ${i + 1}/${n}: ${e.message}. Mencoba lagi (${attempt + 2}/${TRIES})…`);
+          await sleep(700 * (attempt + 1));
         }
       }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(3, n) }, worker));
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, n) }, worker));
   return parts;
 }
 
@@ -321,10 +322,14 @@ function startUpload(){
   const me = up = { file: chosen, pw: pw.value, ctrl, state: 'run', pct: 0 };
   me.promise = (async () => {
     await ensureCfg();
+    const t = await fetch('/api/chunk?test=1', { method: 'POST', headers: { 'x-pw': encodeURIComponent(me.pw) }, signal: ctrl.signal }).catch(() => null);
+    if (!t) throw new Error('Server tidak terjangkau dari jaringan ini.');
+    if (!t.ok){ const d = await t.json().catch(() => ({})); throw new Error(d.error || `Server membalas HTTP ${t.status}`); }
     const parts = await uploadChunks(me.file, me.pw, (p) => {
       me.pct = p; if (up === me) paintUpload();
       if (busy){ fill.style.width = p+'%'; lbl.textContent = `Mengunggah… ${Math.floor(p)}%`; }
-    }, ctrl.signal);
+    }, ctrl.signal, (note) => { if (up === me) say(note, true); });
+    say('');
     me.parts = parts; me.pct = 100; me.state = 'done'; if (up === me) paintUpload();
     return parts;
   })().catch((e) => {
@@ -435,7 +440,6 @@ $('#f').addEventListener('submit', async (e) => {
     setTimeout(() => reset(), 1100);
   } catch (err) {
     send.classList.remove('wait'); say(err.message || 'Gagal', true);
-    if (up?.state === 'err') up = null;
     reset(true);
   } finally { wake?.release?.().catch(()=>{}); wake = null; }
 });
