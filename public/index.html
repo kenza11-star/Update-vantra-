@@ -17,6 +17,7 @@
   --sans:'Hanken Grotesk',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
 }
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
 html{background:var(--bg);color:var(--tx);font-family:var(--sans);-webkit-font-smoothing:antialiased}
 body{min-height:100dvh;padding:max(20px,env(safe-area-inset-top)) 20px max(28px,env(safe-area-inset-bottom));overflow-x:hidden}
 body::before{content:"";position:fixed;inset:-20% -10% auto;height:70vh;pointer-events:none;
@@ -26,6 +27,7 @@ header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:8px 2px
 .logo{width:38px;height:38px;border-radius:12px;background:var(--s2);display:grid;place-items:center;font-size:20px}
 header h1{font-size:20px;font-weight:800;letter-spacing:-.02em}
 header p{color:var(--mute);font-size:13px}
+.stage,.card,form,main>*{min-width:0}
 .card{background:var(--s1);border-radius:28px;padding:22px;border:1px solid var(--line)}
 form{display:grid;gap:18px}
 label{display:grid;gap:8px;font-size:13px;font-weight:600;color:var(--mute)}
@@ -50,7 +52,7 @@ textarea{resize:vertical;min-height:96px;line-height:1.5}
 .drop:hover .ico,.drop.over .ico{transform:translateY(-3px) rotate(-6deg)}
 .drop b{display:block;font-size:16px;font-weight:600;word-break:break-all}
 .drop small{color:var(--mute);font-size:13px}
-.drop .meta{font:400 12px var(--mono);color:var(--acc2);margin-top:6px;display:block}
+.drop .meta{white-space:pre-line;font:400 12px var(--mono);color:var(--acc2);margin-top:6px;display:block}
 
 /* send */
 .send{position:relative;height:58px;border:0;border-radius:29px;background:var(--tx);color:#000;font:800 17px var(--sans);cursor:pointer;overflow:hidden;
@@ -88,7 +90,8 @@ textarea{resize:vertical;min-height:96px;line-height:1.5}
 .bar{height:46px;border-radius:23px;background:#1b1b1b;position:relative;overflow:hidden;display:grid;place-items:center;font-weight:700;font-size:14px;color:#fff}
 .bar i{position:absolute;inset:0 auto 0 0;width:0;background:rgba(255,138,31,.32)}
 .bar span{position:relative}
-.notif{display:flex;gap:12px;align-items:center;background:rgba(30,30,30,.92);border-radius:22px;padding:12px 14px;transform:translateY(-14px) scale(.96);opacity:0;transition:transform .6s var(--spring),opacity .4s}
+.notif{display:flex;gap:12px;align-items:center;background:rgba(30,30,30,.92);border-radius:22px;padding:12px 14px;max-height:90px;transform:translateY(-14px) scale(.96);opacity:0;transition:transform .6s var(--spring),opacity .4s,max-height .5s var(--ease),padding .5s var(--ease),margin .5s var(--ease)}
+.notif:not(.show){max-height:0;padding-top:0;padding-bottom:0;margin-top:-12px;overflow:hidden}
 .notif.show{transform:none;opacity:1}
 .notif .ni{width:34px;height:34px;border-radius:10px;background:var(--acc);display:grid;place-items:center;font-size:17px}
 .notif b{display:block;font-size:14px}.notif small{color:var(--mute);font-size:12.5px}
@@ -119,14 +122,14 @@ textarea{resize:vertical;min-height:96px;line-height:1.5}
 .item{display:flex;align-items:center;gap:14px;padding:14px 4px;border-top:1px solid var(--line);animation:in .5s var(--ease) both}
 .item:first-of-type{border-top:0}
 @keyframes in{from{opacity:0;transform:translateY(8px)}}
-.item .v{font:500 18px var(--mono);min-width:92px}
-.item .n{flex:1;min-width:0;color:var(--mute);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .v{font:500 18px var(--mono);min-width:76px}
+.item{flex-wrap:wrap;row-gap:10px}.item .n{flex:1 1 120px;min-width:0;color:var(--mute);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .item .tag{font-size:11.5px;color:#1a0d00;background:var(--acc);border-radius:99px;padding:3px 9px;font-weight:700}
 .item button.rm{background:var(--s2);border:0;color:var(--mute);border-radius:99px;padding:8px 14px;font:600 13px var(--sans);cursor:pointer;transition:background .2s,color .2s,transform .25s var(--spring)}
 .item button.rm:hover{background:#2a1414;color:var(--bad)}.item button.rm:active{transform:scale(.92)}
 .empty{color:var(--mute);font-size:14px;padding:10px 2px}
 
-@media(max-width:860px){main{grid-template-columns:1fr}.stage{position:static}}
+@media(max-width:860px){main{grid-template-columns:minmax(0,1fr)}.stage{position:static}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 :focus-visible{outline:2px solid var(--acc);outline-offset:3px}
 </style>
@@ -256,50 +259,79 @@ async function ensureCfg(){
 }
 
 /* ---------- chunked upload: 4 MB pieces through our own server, 3 at a time, each retried ---------- */
-const CHUNK = 2 * 1024 * 1024, PARALLEL = 2, TRIES = 5;
-async function uploadChunks(f, password, onProgress, signal, onNote){
-  const id = [...crypto.getRandomValues(new Uint8Array(10))].map((b) => b.toString(16).padStart(2,'0')).join('');
-  const n = Math.ceil(f.size / CHUNK), parts = new Array(n), loaded = new Array(n).fill(0);
-  const sizeOf = (i) => Math.min(CHUNK, f.size - i * CHUNK);
-  const report = () => onProgress(Math.min(99.9, loaded.reduce((a, b) => a + b, 0) / f.size * 100));
+const MAXC = 4_000_000, MINC = 128 * 1024, START = 1024 * 1024, PARALLEL = 3;
+const fmtKB = (b) => b >= 1e6 ? (b/1e6).toFixed(1)+' MB' : Math.round(b/1e3)+' KB';
 
-  const sendChunk = (i) => new Promise((resolve, reject) => {
+/* Adaptive: starts with 1 MB pieces, doubles after 3 good ones (up to 4 MB, Vercel's body limit),
+   and halves the piece that failed (down to 128 KB). A network that cuts big requests still gets through. */
+async function uploadChunks(f, password, onProgress, signal, onNote){
+  const id = [...crypto.getRandomValues(new Uint8Array(10))].map((x) => x.toString(16).padStart(2,'0')).join('');
+  const pending = [], results = [], inflight = new Set();
+  let cursor = 0, size = START, seq = 0, done = 0, okRun = 0, consecFail = 0, failed = null;
+  const report = () => { let bytes = done; inflight.forEach((l) => bytes += l.loaded); onProgress(Math.min(99.9, bytes / f.size * 100), Math.min(bytes, f.size)); };
+  const take = () => {
+    if (pending.length) return pending.shift();
+    if (cursor >= f.size) return null;
+    const r = { start: cursor, end: Math.min(f.size, cursor + size), tries: 0 }; cursor = r.end; return r;
+  };
+
+  const sendOne = (r, live) => new Promise((resolve, reject) => {
     const x = new XMLHttpRequest();
-    x.open('POST', `/api/chunk?id=${id}&n=${i}`);
-    x.timeout = 120000;
+    x.open('POST', `/api/chunk?id=${id}&n=${seq++}`);
+    x.timeout = 90000;
     x.setRequestHeader('content-type', 'application/octet-stream');
     x.setRequestHeader('x-pw', encodeURIComponent(password));
-    x.upload.onprogress = (e) => { loaded[i] = e.loaded; report(); };
+    x.upload.onprogress = (e) => { live.loaded = e.loaded; report(); };
     x.onload = () => {
       let d = {}; try { d = JSON.parse(x.responseText); } catch {}
       if (x.status === 200 && d.url) return resolve(d);
-      const err = new Error(d.error || (x.status === 401 || x.status === 403 ? `Ditolak (HTTP ${x.status}). Buka lewat alamat utama, bukan alamat deployment.` : `Server membalas HTTP ${x.status}`));
+      const err = new Error(d.error || (x.status === 401 || x.status === 403 ? `Ditolak (HTTP ${x.status}). Buka lewat alamat utama.` : `Server membalas HTTP ${x.status}`));
       err.fatal = [400, 401, 403, 413].includes(x.status); reject(err);
     };
-    x.onerror = () => reject(new Error('Jaringan putus'));
+    x.onerror = () => reject(new Error('Koneksi putus'));
     x.ontimeout = () => reject(new Error('Koneksi terlalu lambat'));
     x.onabort = () => reject(new Error('Dibatalkan'));
     signal.addEventListener('abort', () => x.abort(), { once: true });
-    x.send(f.slice(i * CHUNK, i * CHUNK + sizeOf(i)));
+    x.send(f.slice(r.start, r.end));
   });
 
-  let next = 0, failed = null;
   const worker = async () => {
     while (!failed){
-      const i = next++; if (i >= n) return;
-      for (let attempt = 0; ; attempt++){
-        try { parts[i] = await sendChunk(i); loaded[i] = sizeOf(i); report(); break; }
-        catch (e){
-          if (signal.aborted) throw e;
-          if (e.fatal || attempt >= TRIES - 1){ failed = new Error(`Potongan ${i + 1}/${n} gagal: ${e.message}`); throw failed; }
-          loaded[i] = 0; report(); onNote?.(`Potongan ${i + 1}/${n}: ${e.message}. Mencoba lagi (${attempt + 2}/${TRIES})…`);
-          await sleep(700 * (attempt + 1));
+      const r = take(); if (!r) return;
+      const live = { loaded: 0 }; inflight.add(live);
+      try {
+        const d = await sendOne(r, live);
+        inflight.delete(live); done += r.end - r.start; results.push({ start: r.start, url: d.url, size: d.size });
+        consecFail = 0; onNote?.('');
+        if (++okRun >= 3){ okRun = 0; size = Math.min(MAXC, size * 2); }
+        report();
+      } catch (e){
+        inflight.delete(live);
+        if (signal.aborted) throw e;
+        if (e.fatal){ failed = e; throw e; }
+        okRun = 0; consecFail++;
+        if (consecFail >= 30){ failed = new Error(`Koneksi terlalu buruk untuk upload: ${e.message}`); throw failed; }
+        const len = r.end - r.start;
+        if (len > MINC){
+          const mid = Math.min(r.end - 1, r.start + Math.ceil(len / 2 / 1024) * 1024);
+          pending.unshift({ start: r.start, end: mid, tries: 0 }, { start: mid, end: r.end, tries: 0 });
+          size = Math.max(MINC, Math.floor(len / 2));
+        } else {
+          r.tries++;
+          if (r.tries >= 6){ failed = new Error(`Potongan gagal terus: ${e.message}`); throw failed; }
+          pending.unshift(r);
         }
+        onNote?.(`${e.message}. Potongan diperkecil ke ${fmtKB(size)}, mencoba lagi…`); report();
+        await sleep(Math.min(3000, 400 * consecFail));
       }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(PARALLEL, n) }, worker));
-  return parts;
+  await Promise.all(Array.from({ length: PARALLEL }, worker));
+
+  results.sort((a, b) => a.start - b.start);
+  let pos = 0; for (const p of results){ if (p.start !== pos) throw new Error('Potongan tidak lengkap, coba lagi'); pos += p.size; }
+  if (pos !== f.size) throw new Error('Potongan tidak lengkap, coba lagi');
+  return results.map(({ url, size }) => ({ url, size }));
 }
 
 /* ---------- background upload: starts the moment APK + password are there ---------- */
@@ -309,26 +341,39 @@ function paintUpload(){
   fmeta.className = 'meta' + (up?.state === 'done' ? ' ok' : up?.state === 'err' ? ' bad' : '');
   if (!chosen){ dbar.style.width='0'; fmeta.textContent=''; return; }
   if (!up){ dbar.style.width='0'; fmeta.textContent = fmt(chosen.size) + (pw.value ? '' : ' · isi password untuk mulai upload'); return; }
-  if (up.state === 'run'){ dbar.style.opacity=1; dbar.style.width = up.pct+'%'; fmeta.textContent = up.pct >= 0.5 ? `Mengunggah ${Math.floor(up.pct)}% · ${fmt(chosen.size*up.pct/100)} / ${fmt(chosen.size)}` : `${fmt(chosen.size)} · menyambung…`; }
+  if (up.state === 'run'){
+    dbar.style.opacity=1; dbar.style.width = up.pct+'%';
+    if (up.pct < 0.5 && !up.bytes){ fmeta.textContent = `${fmt(chosen.size)} · menyambung…`; }
+    else {
+      const eta = up.speed > 2000 ? (chosen.size - up.bytes) / up.speed : 0;
+      const etaTxt = eta ? ' · sisa ' + (eta >= 90 ? Math.round(eta/60) + ' mnt' : Math.max(1, Math.round(eta)) + ' dtk') : '';
+      fmeta.textContent = `Mengunggah ${Math.floor(up.pct)}% · ${fmt(up.bytes)} / ${fmt(chosen.size)}` + (up.speed > 2000 ? ` · ${fmtKB(up.speed)}/dtk${etaTxt}` : '') + (up.note ? '\n' + up.note : '');
+    }
+  }
   if (up.state === 'done'){ fmeta.textContent = `${fmt(chosen.size)} · siap dikirim ✓`; }
   if (up.state === 'err'){ fmeta.textContent = up.err; dbar.style.width='0'; }
 }
-function cancelUpload(){ if (up?.state === 'run') up.ctrl.abort(); up = null; }
+async function awake(on){ try { if (on){ if (!wake) wake = await navigator.wakeLock?.request('screen'); } else if (wake){ await wake.release(); wake = null; } } catch { wake = null; } }
+function cancelUpload(){ if (up?.state === 'run') up.ctrl.abort(); up = null; awake(false); }
 function startUpload(){
   if (!chosen || !pw.value) return;
   if (up && up.file === chosen && up.pw === pw.value && up.state !== 'err') return;
   cancelUpload();
   const ctrl = new AbortController();
-  const me = up = { file: chosen, pw: pw.value, ctrl, state: 'run', pct: 0 };
+  const me = up = { file: chosen, pw: pw.value, ctrl, state: 'run', pct: 0, bytes: 0, speed: 0, note: '', samples: [] };
   me.promise = (async () => {
     await ensureCfg();
     const t = await fetch('/api/chunk?test=1', { method: 'POST', headers: { 'x-pw': encodeURIComponent(me.pw) }, signal: ctrl.signal }).catch(() => null);
     if (!t) throw new Error('Server tidak terjangkau dari jaringan ini.');
     if (!t.ok){ const d = await t.json().catch(() => ({})); throw new Error(d.error || `Server membalas HTTP ${t.status}`); }
-    const parts = await uploadChunks(me.file, me.pw, (p) => {
-      me.pct = p; if (up === me) paintUpload();
+    const parts = await uploadChunks(me.file, me.pw, (p, bytes) => {
+      me.pct = p; me.bytes = bytes;
+      const now = Date.now(); me.samples.push([now, bytes]);
+      while (me.samples.length > 2 && now - me.samples[0][0] > 8000) me.samples.shift();
+      const [t0, b0] = me.samples[0]; me.speed = now > t0 ? Math.max(0, (bytes - b0) / ((now - t0) / 1000)) : 0;
+      if (up === me) paintUpload();
       if (busy){ fill.style.width = p+'%'; lbl.textContent = `Mengunggah… ${Math.floor(p)}%`; }
-    }, ctrl.signal, (note) => { if (up === me) say(note, true); });
+    }, ctrl.signal, (note) => { me.note = note; if (up === me) paintUpload(); });
     say('');
     me.parts = parts; me.pct = 100; me.state = 'done'; if (up === me) paintUpload();
     return parts;
@@ -339,7 +384,8 @@ function startUpload(){
     throw e;
   });
   me.promise.catch(() => {});
-  paintUpload();
+  me.promise.finally(() => { if (!busy) awake(false); }).catch(() => {});
+  awake(true); paintUpload();
 }
 
 /* ---------- file ---------- */
@@ -418,7 +464,7 @@ $('#f').addEventListener('submit', async (e) => {
   busy = true; send.classList.add('busy'); send.disabled = true; say('');
   const version = ver.value.trim(), password = pw.value;
   localStorage.setItem('vp', password);
-  try { wake = await navigator.wakeLock?.request('screen'); } catch {}
+  awake(true);
   try {
     if (linkMode){
       lbl.textContent = 'Mengirim…'; fill.style.width = '100%';
@@ -441,7 +487,7 @@ $('#f').addEventListener('submit', async (e) => {
   } catch (err) {
     send.classList.remove('wait'); say(err.message || 'Gagal', true);
     reset(true);
-  } finally { wake?.release?.().catch(()=>{}); wake = null; }
+  } finally { awake(false); }
 });
 function reset(keep){
   busy = false; send.classList.remove('busy','done','wait'); fill.style.width='0'; lbl.textContent='Send';

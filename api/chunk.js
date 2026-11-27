@@ -39,7 +39,7 @@ export default async function handler(req, res) {
 
   const id = String(req.query.id ?? '').replace(/[^a-z0-9]/gi, '').slice(0, 40);
   const n = Number(req.query.n);
-  if (!id || !Number.isInteger(n) || n < 0 || n > 500) return res.status(400).json({ error: 'Permintaan tidak valid' });
+  if (!id || !Number.isInteger(n) || n < 0 || n > 5000) return res.status(400).json({ error: 'Permintaan tidak valid' });
   try {
     const body = await readBody(req);
     if (!body.length || body.length > MAX) return res.status(400).json({ error: 'Ukuran potongan tidak valid' });

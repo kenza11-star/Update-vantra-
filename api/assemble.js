@@ -1,6 +1,6 @@
 // joins the uploaded pieces into one APK, puts it on the release list ("Send"), and removes the pieces
 import { put, del } from '@vercel/blob';
-import { authed, readReleases, writeReleases, VERSION_RE } from './_lib.js';
+import { authed, readReleases, writeReleases, sweepTemp, VERSION_RE } from './_lib.js';
 
 const isBlobUrl = (u) => {
   try { const x = new URL(u); return x.protocol === 'https:' && x.hostname.endsWith('.blob.vercel-storage.com'); } catch { return false; }
@@ -25,15 +25,18 @@ export default async function handler(req, res) {
 
   const v = String(version ?? '').trim();
   if (!VERSION_RE.test(v)) return res.status(400).json({ error: 'Format versi: 8.3.2 atau 8.3.2 (120)' });
-  if (!Array.isArray(parts) || !parts.length || parts.length > 500) return res.status(400).json({ error: 'Potongan APK tidak ada' });
+  if (!Array.isArray(parts) || !parts.length || parts.length > 5000) return res.status(400).json({ error: 'Potongan APK tidak ada' });
   if (!parts.every((p) => p && isBlobUrl(p.url) && p.url.includes('/tmp/'))) return res.status(400).json({ error: 'Potongan tidak valid' });
 
   try {
-    const buffers = [];
-    for (const p of parts) {
-      const b = await getPart(p.url);
-      if (Number(p.size) && b.length !== Number(p.size)) throw new Error('Potongan rusak, upload ulang');
-      buffers.push(b);
+    // pieces are fetched 8 at a time (order kept), so thousands of small pieces still join in seconds
+    const buffers = new Array(parts.length);
+    for (let i = 0; i < parts.length; i += 8) {
+      await Promise.all(parts.slice(i, i + 8).map(async (p, k) => {
+        const b = await getPart(p.url);
+        if (Number(p.size) && b.length !== Number(p.size)) throw new Error('Potongan rusak, upload ulang');
+        buffers[i + k] = b;
+      }));
     }
     const apk = Buffer.concat(buffers);
     if (apk.length < 1024 || apk[0] !== 0x50 || apk[1] !== 0x4b) throw new Error('File bukan APK yang valid');
@@ -60,6 +63,7 @@ export default async function handler(req, res) {
     await writeReleases([release, ...all.filter((r) => r.version !== v)].slice(0, 50));
 
     await del(parts.map((p) => p.url)).catch(() => {});
+    await sweepTemp();
     if (old && isBlobUrl(old.apkUrl)) await del(old.apkUrl).catch(() => {});
     res.status(200).json({ ok: true, release });
   } catch (e) {

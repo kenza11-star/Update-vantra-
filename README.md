@@ -12,7 +12,8 @@ Upload APK → isi Version → **Send**. App melihat versi baru, kirim notifikas
 Kalau alamat utama minta login Vercel: **Settings → Deployment Protection → Vercel Authentication → Disabled**.
 
 ## Cara kerja upload
-APK dipecah di browser jadi potongan 2 MB, dikirim ke `/api/chunk` (2 sekaligus, tiap potongan diulang otomatis kalau gagal). Upload mulai begitu file dipilih dan password terisi. Saat **Send**, `/api/assemble` menyambung potongan jadi satu APK, memeriksa itu file APK, menaruhnya di daftar rilis, dan menghapus potongan sementara. Tidak ada token/callback ke storage, jadi tidak tergantung alamat deployment.
+APK dipecah di browser dan dikirim ke `/api/chunk` (3 sekaligus). Ukuran potongan **menyesuaikan koneksi**: mulai 1 MB, naik sampai 4 MB (batas body Vercel) kalau lancar, dan otomatis diperkecil (sampai 128 KB) kalau koneksi memutus request besar, seperti pada data seluler yang buruk. Kecepatan, sisa waktu, dan keadaan koneksi tampil di kotak APK. Layar dijaga tetap menyala selama upload.
+Upload mulai begitu file dipilih dan password terisi. Saat **Send**, `/api/assemble` menyambung potongan jadi satu APK, memeriksa itu file APK, menaruhnya di daftar rilis, dan menghapus potongan sementara. Potongan dari upload yang ditinggalkan dibersihkan otomatis setelah 2 jam. Tidak ada token/callback ke storage, jadi tidak tergantung alamat deployment.
 
 ## Endpoint
 - `GET /api/releases` → daftar rilis (format GitHub Releases, dipakai app)
