@@ -15,6 +15,13 @@ Kalau alamat utama minta login Vercel: **Settings → Deployment Protection → 
 APK dipecah di browser dan dikirim ke `/api/chunk` (3 sekaligus). Ukuran potongan **menyesuaikan koneksi**: mulai 1 MB, naik sampai 4 MB (batas body Vercel) kalau lancar, dan otomatis diperkecil (sampai 128 KB) kalau koneksi memutus request besar, seperti pada data seluler yang buruk. Kecepatan, sisa waktu, dan keadaan koneksi tampil di kotak APK. Layar dijaga tetap menyala selama upload.
 Upload mulai begitu file dipilih dan password terisi. Saat **Send**, `/api/assemble` menyambung potongan jadi satu APK, memeriksa itu file APK, menaruhnya di daftar rilis, dan menghapus potongan sementara. Potongan dari upload yang ditinggalkan dibersihkan otomatis setelah 2 jam. Tidak ada token/callback ke storage, jadi tidak tergantung alamat deployment.
 
+## Pemeriksaan versi APK (mencegah "update tidak berubah")
+Saat **Send**, server membaca `versionName`, `versionCode`, dan package dari dalam APK, lalu menolak kalau:
+- `versionName` di APK berbeda dari angka **Version** yang diketik (HP akan tetap di versi lama dan terus minta update),
+- `versionCode` tidak lebih besar dari rilis sebelumnya (Android menolak update),
+- package berbeda dari rilis sebelumnya (akan terpasang sebagai app lain).
+Kalau APK tidak bisa dibaca, pemeriksaan dilewati dan upload tetap diterima. Mode link tidak bisa diperiksa.
+
 ## Endpoint
 - `GET /api/releases` → daftar rilis (format GitHub Releases, dipakai app)
 - `GET /api/config` · `POST /api/chunk` · `POST /api/assemble` · `POST /api/publish` (mode link) · `POST /api/delete`

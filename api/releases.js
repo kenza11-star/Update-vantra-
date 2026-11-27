@@ -14,6 +14,7 @@ export default async function handler(_req, res) {
         draft: false,
         prerelease: false,
         published_at: r.createdAt,
+        vantra: { versionCode: r.versionCode ?? null, packageName: r.packageName ?? null },
         assets: [{ name: r.apkName, browser_download_url: r.apkUrl, size: r.size }],
       })),
     );

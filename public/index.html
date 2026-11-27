@@ -485,8 +485,9 @@ $('#f').addEventListener('submit', async (e) => {
     loadList(); simulateUser(version);
     setTimeout(() => reset(), 1100);
   } catch (err) {
-    send.classList.remove('wait'); say(err.message || 'Gagal', true);
-    reset(true);
+    send.classList.remove('wait');
+    reset(true);                            // reset() clears the hint, so the message is written after it
+    say(err.message || 'Gagal', true);
   } finally { awake(false); }
 });
 function reset(keep){
@@ -507,7 +508,7 @@ async function loadList(){
     const v = r.tag_name.replace(/^v/,''), a = r.assets[0] || {};
     const first = (r.body||'').split('\n').map(x=>x.replace(/^[-•*\s]+/,'')).find(Boolean) || '';
     const row = document.createElement('div'); row.className='item'; row.style.animationDelay=(i*45)+'ms';
-    row.innerHTML = `<span class="v">${v}</span><span class="n">${new Date(r.published_at).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})}${a.size?' · '+fmt(a.size):''}${first?`<small></small>`:''}</span>${i===0?'<span class="tag">terbaru</span>':''}<button class="cp" type="button">Salin link</button><button class="rm" type="button">Hapus</button>`;
+    row.innerHTML = `<span class="v">${v}</span><span class="n">${new Date(r.published_at).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})}${a.size?' · '+fmt(a.size):''}${r.vantra&&r.vantra.versionCode?' · kode '+r.vantra.versionCode:''}${first?`<small></small>`:''}</span>${i===0?'<span class="tag">terbaru</span>':''}<button class="cp" type="button">Salin link</button><button class="rm" type="button">Hapus</button>`;
     if (first) row.querySelector('small').textContent = first;
     row.querySelector('.cp').onclick = () => { navigator.clipboard?.writeText(a.browser_download_url||''); toast('Link APK disalin'); };
     row.querySelector('.rm').onclick = async (ev) => {
